@@ -23,54 +23,89 @@ class WordClockFrUsermod : public Usermod
     // set your config variables to their boot default value (this can also be done in readFromConfig() or a constructor if you prefer)
     bool usermodActive = false;
     bool displayItIs = false;
+    bool displayPAM = false;
     
     // defines for mask sizes
-    #define maskSizeLeds        114
-    #define maskSizeMinutes     12
-    #define maskSizeHours       6
+    #define maskSizeLeds        110
+    #define maskSizeMinutes     15
+    #define maskSizeHours       12
     #define maskSizeItIs        5
-    #define maskSizeMinuteDots  4
+    #define maskSizeMinuteDots  2
+    #define maskSizeAntePostMeridiem  2
 
+/*
+    01234567890 0→10
+    ILMESTIDEUX
+    12345678901 11→21
+    QUATRELUNES
+    23456789012 22→32
+    HUITROISEPT
+    34567890123 33→43
+    NEUFONZESIX
+    45678901234 44→54
+    MIDIXMINUIT
+    56789012345 55→65
+    CINQYHEURES
+    67890123456 66→76
+    JMOINSKLETB
+    78901234567 77→87
+    DEMIELQUART
+    89012345678 88→98
+    VINGT-CINQW
+    90123456789 99→109
+    DIX+1234PAM
+*/
     // "minute" masks
     const int maskMinutes[12][maskSizeMinutes] = 
     {
-      {107, 108, 109,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1}, // :00
-      {  7,   8,   9,  10,  40,  41,  42,  43,  -1,  -1,  -1,  -1}, // :05 fünf nach
-      { 11,  12,  13,  14,  40,  41,  42,  43,  -1,  -1,  -1,  -1}, // :10 zehn nach
-      { 26,  27,  28,  29,  30,  31,  32,  -1,  -1,  -1,  -1,  -1}, // :15 viertel
-      { 15,  16,  17,  18,  19,  20,  21,  40,  41,  42,  43,  -1}, // :20 zwanzig nach
-      {  7,   8,   9,  10,  33,  34,  35,  44,  45,  46,  47,  -1}, // :25 fünf vor halb
-      { 44,  45,  46,  47,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1}, // :30 halb
-      {  7,   8,   9,  10,  40,  41,  42,  43,  44,  45,  46,  47}, // :35 fünf nach halb
-      { 15,  16,  17,  18,  19,  20,  21,  33,  34,  35,  -1,  -1}, // :40 zwanzig vor
-      { 22,  23,  24,  25,  26,  27,  28,  29,  30,  31,  32,  -1}, // :45 dreiviertel
-      { 11,  12,  13,  14,  33,  34,  35,  -1,  -1,  -1,  -1,  -1}, // :50 zehn vor
-      {  7,   8,   9,  10,  33,  34,  35,  -1,  -1,  -1,  -1,  -1}  // :55 fünf vor
+      { -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1}, // :00
+      { 94,  95,  96,  97,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1}, // :05  CINQ 
+      { 99, 100, 101,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1}, // :10  DIX
+      { 74,  75,  83,  84,  85,  86,  87,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1}, // :15  ET QUART
+      { 88,  89,  90,  91,  92,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1}, // :20  VINGT
+      { 88,  89,  90,  91,  92,  93,  94,  95,  96,  97,  -1,  -1,  -1,  -1,  -1}, // :25  VINGT-CINQ
+      { 74,  75,  77,  78,  79,  80,  81,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1}, // :30  ET DEMIE
+      { 67,  68,  69,  70,  71,  88,  89,  90,  91,  92,  93,  94,  95,  96,  97}, // :35  MOINS VINGT-CINQ
+      { 67,  68,  69,  70,  71,  88,  89,  90,  91,  92,  -1,  -1,  -1,  -1,  -1}, // :40  MOINS VINGT
+      { 67,  68,  69,  70,  71,  73,  74,  83,  84,  85,  86,  87,  -1,  -1,  -1}, // :45  MOINS LE QUART
+      { 67,  68,  69,  70,  71,  99, 100, 101,  -1,  -1,  -1,  -1,  -1,  -1,  -1}, // :50  MOINS DIX
+      { 67,  68,  69,  70,  71,  94,  95,  96,  97,  -1,  -1,  -1,  -1,  -1,  -1}  // :55  MOINS CINQ
     };
 
     // hour masks
     const int maskHours[13][maskSizeHours] = 
     {
-      { 55,  56,  57,  -1,  -1,  -1}, // 01: ein
-      { 55,  56,  57,  58,  -1,  -1}, // 01: eins
-      { 62,  63,  64,  65,  -1,  -1}, // 02: zwei
-      { 66,  67,  68,  69,  -1,  -1}, // 03: drei
-      { 73,  74,  75,  76,  -1,  -1}, // 04: vier
-      { 51,  52,  53,  54,  -1,  -1}, // 05: fünf
-      { 77,  78,  79,  80,  81,  -1}, // 06: sechs
-      { 88,  89,  90,  91,  92,  93}, // 07: sieben
-      { 84,  85,  86,  87,  -1,  -1}, // 08: acht
-      {102, 103, 104, 105,  -1,  -1}, // 09: neun
-      { 99, 100, 101, 102,  -1,  -1}, // 10: zehn
-      { 49,  50,  51,  -1,  -1,  -1}, // 11: elf
-      { 94,  95,  96,  97,  98,  -1}  // 12: zwölf and 00: null
+      { 49,  50,  51,  52,  53,  54,  -1,  -1,  -1,  -1,  -1,  -1}, // 00: MINUIT
+      { 18,  19,  20,  60,  61,  62,  63,  64,  -1,  -1,  -1,  -1}, // 01: UNE HEURE
+      {  7,   8,   9,  10,  60,  61,  62,  63,  64,  65,  -1,  -1}, // 02: DEUX HEURES
+      { 25,  26,  27,  28,  29,  60,  61,  62,  63,  64,  65,  -1}, // 03: TROIS HEURES
+      { 11,  12,  13,  14,  15,  16,  60,  61,  62,  63,  64,  65}, // 04: QUATRE HEURES
+      { 55,  56,  57,  58,  60,  61,  62,  63,  64,  65,  -1,  -1}, // 05: CINQ HEURES
+      { 41,  42,  43,  60,  61,  62,  63,  64,  65,  -1,  -1,  -1}, // 06: SIX HEURES
+      { 29,  30,  31,  32,  60,  61,  62,  63,  64,  65,  -1,  -1}, // 07: SEPT HEURES
+      { 22,  23,  24,  25,  60,  61,  62,  63,  64,  65,  -1,  -1}, // 08: HUIT HEURES
+      { 33,  34,  35,  36,  60,  61,  62,  63,  64,  65,  -1,  -1}, // 09: NEUF HEURES
+      { 46,  47,  48,  60,  61,  62,  63,  64,  65,  -1,  -1,  -1}, // 10: DIX HEURES
+      { 37,  38,  39,  40,  60,  61,  62,  63,  64,  65,  -1,  -1}, // 11: ONZE HEURES
+      { 44,  45,  46,  47,  60,  61,  62,  63,  64,  65,  -1,  -1}  // 12: MIDI
     };
 
     // mask "Il est"
     const int maskItIs[maskSizeItIs] = {0, 1, 3, 4, 5};
 
     // mask minute dots
-    const int maskMinuteDots[maskSizeMinuteDots] = {110, 111, 112, 113};
+    const int maskMinuteDots[4][maskSizeMinuteDots] = {
+      { 102, 103}, //+1
+      { 102, 104}, //+2
+      { 102, 105}, //+3
+      { 102, 106}  //+4
+    };
+    
+    // mask afternoon or morning
+    const int maskAntePostMeridiem[2][maskSizeAntePostMeridiem] = {
+      { 108, 109}, //AM
+      { 107, 109}  //PM
+    };
 
     // overall mask to define which LEDs are on
     int maskLedsOn[maskSizeLeds] = 
@@ -84,8 +119,7 @@ class WordClockFrUsermod : public Usermod
       0,0,0,0,0,0,0,0,0,0,0,
       0,0,0,0,0,0,0,0,0,0,0,
       0,0,0,0,0,0,0,0,0,0,0,
-      0,0,0,0,0,0,0,0,0,0,0,
-      0,0,0,0
+      0,0,0,0,0,0,0,0,0,0,0
     };
 
     // update led mask
@@ -104,26 +138,14 @@ class WordClockFrUsermod : public Usermod
     }
 
     // set hours
-    void setHours(int hours, bool fullClock)
+    void setHours(int hours)
     {
       int index = hours;
 
-      // handle 00:xx as 12:xx
-      if (hours == 0)
-      {
-        index = 12;
-      }
-
       // check if we get an overrun of 12 o´clock
-      if (hours == 13)
+      if (hours >= 13)
       {
-        index = 1;
-      }
-
-      // special handling for "ein Uhr" instead of "eins Uhr"
-      if (hours == 1 && fullClock == true)
-      {
-        index = 0;
+        index -= 12;
       }
 
       // update led mask
@@ -146,13 +168,15 @@ class WordClockFrUsermod : public Usermod
       // check if minute dots are active
       if (minutesDotCount > 0)
       {
-        // activate all minute dots until number is reached
-        for (int i = 0; i < minutesDotCount; i++)
-        {
-          // activate LED
-          maskLedsOn[maskMinuteDots[i]] = 1;  
-        }
+        updateLedMask(maskMinuteDots[minutesDotCount-1], maskSizeMinuteDots);
       }
+    }
+
+    
+    // set AM or PM
+    void setAntePostMeridiem(int hours)
+    {
+      updateLedMask(maskAntePostMeridiem[(hours>=12)], maskSizeAntePostMeridiem);
     }
 
     // update the display
@@ -179,63 +203,68 @@ class WordClockFrUsermod : public Usermod
         case 0:
             // full hour
             setMinutes(0);
-            setHours(hours, true);
+            setHours(hours);
             break;
         case 1:
             // 5 nach
             setMinutes(1);
-            setHours(hours, false);
+            setHours(hours);
             break;
         case 2:
             // 10 nach
             setMinutes(2);
-            setHours(hours, false);
+            setHours(hours);
             break;
         case 3:
-            // viertel
+            // 15
             setMinutes(3);
-            setHours(hours + 1, false);
+            setHours(hours);
             break;
         case 4:
             // 20 nach
             setMinutes(4);
-            setHours(hours, false);
+            setHours(hours);
             break;
         case 5:
-            // 5 vor halb
+            // 25
             setMinutes(5);
-            setHours(hours + 1, false);
+            setHours(hours);
             break;
         case 6:
-            // halb
+            // 30
             setMinutes(6);
-            setHours(hours + 1, false);
+            setHours(hours);
             break;
         case 7:
-            // 5 nach halb
+            // -25
             setMinutes(7);
-            setHours(hours + 1, false);
+            setHours(hours + 1);
             break;
         case 8:
-            // 20 vor
+            // -20
             setMinutes(8);
-            setHours(hours + 1, false);
+            setHours(hours + 1);
             break;
         case 9:
-            // viertel vor
+            // -15
             setMinutes(9);
-            setHours(hours + 1, false);
+            setHours(hours + 1);
             break;
         case 10:
-            // 10 vor
+            // -10
             setMinutes(10);
-            setHours(hours + 1, false);
+            setHours(hours + 1);
             break;
         case 11:
-            // 5 vor
+            // -5
             setMinutes(11);
-            setHours(hours + 1, false);
+            setHours(hours + 1);
             break;
+        }
+
+        //Set AM or PM if asked
+        if (displayPAM) {
+          setAntePostMeridiem(hours);
         }
     }
 
@@ -271,15 +300,22 @@ class WordClockFrUsermod : public Usermod
     void loop() {
       static bool l_usermodActive_old = false;
       static bool l_displayItIs_old = false;
+      static bool l_displayPAM_old = false;
 
       // do it every 5 seconds
-      if (millis() - lastTime > 5000 || l_usermodActive_old!=usermodActive || l_displayItIs_old!=displayItIs) 
+      if (millis() - lastTime > 5000 || 
+          l_usermodActive_old != usermodActive ||
+          l_displayItIs_old   != displayItIs ||
+          l_displayPAM_old    != displayPAM) 
       {
         // check the time
         int minutes = minute(localTime);
 
         // check if we already updated this minute
-        if (lastTimeMinutes != minutes || l_usermodActive_old!=usermodActive || l_displayItIs_old!=displayItIs)
+        if (lastTimeMinutes != minutes ||
+          l_usermodActive_old != usermodActive ||
+          l_displayItIs_old   != displayItIs ||
+          l_displayPAM_old    != displayPAM) 
         {
           // update the display with new time
           updateDisplay(hourFormat12(localTime), minute(localTime));
@@ -290,6 +326,9 @@ class WordClockFrUsermod : public Usermod
 
         // remember last update
         lastTime = millis();
+        l_usermodActive_old = usermodActive;
+        l_displayItIs_old   = displayItIs;
+        l_displayPAM_old    = displayPAM;
       }
     }
 
@@ -360,6 +399,7 @@ class WordClockFrUsermod : public Usermod
       JsonObject top = root.createNestedObject("Word Clock Fr");
       top["Activer"] = usermodActive;
       top["Allumer Il est"] = displayItIs;
+      top["Allumer PAM"] = displayPAM;
     }
 
     /*
@@ -388,6 +428,7 @@ class WordClockFrUsermod : public Usermod
 
       configComplete &= getJsonValue(top["Activer"], usermodActive);
       configComplete &= getJsonValue(top["Allumer Il est"], displayItIs);
+      configComplete &= getJsonValue(top["Allumer PAM"], displayPAM);
 
       return configComplete;
     }
