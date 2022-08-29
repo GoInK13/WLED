@@ -25,6 +25,7 @@ class WordClockFrUsermod : public Usermod
     bool displayItIs = false;
     bool displayPAM = false;
     bool animationActive = false;
+    bool backgroundColor = false;
     
     // defines for mask sizes
     #define maskSizeLeds        110
@@ -33,6 +34,9 @@ class WordClockFrUsermod : public Usermod
     #define maskSizeItIs        5
     #define maskSizeMinuteDots  2
     #define maskSizeAntePostMeridiem  2
+
+    //0=DISABLE, 1=ENABLE
+    #define DEBUG_WITH_SERIAL 1
 
 /*
     01234567890 0→10
@@ -149,6 +153,8 @@ class WordClockFrUsermod : public Usermod
         index -= 12;
       }
 
+      Print("Hou=%d", index);
+
       // update led mask
       updateLedMask(maskHours[index], maskSizeHours);
     }
@@ -158,6 +164,7 @@ class WordClockFrUsermod : public Usermod
     {
       // update led mask
       updateLedMask(maskMinutes[index], maskSizeMinutes);
+      Print("Min=%d", index);
     }
 
     // set minutes dot
@@ -169,6 +176,7 @@ class WordClockFrUsermod : public Usermod
       // check if minute dots are active
       if (minutesDotCount > 0)
       {
+        Print("Dot=%d", minutesDotCount-1);
         updateLedMask(maskMinuteDots[minutesDotCount-1], maskSizeMinuteDots);
       }
     }
@@ -186,6 +194,7 @@ class WordClockFrUsermod : public Usermod
     {
       int minutes = minute(f_localTime);
       int hours = hour(f_localTime);
+      Print("Change time to %d:%d", hours, minutes);
 
       // disable complete matrix at the bigging
       for (int x = 0; x < maskSizeLeds; x++)
@@ -273,6 +282,18 @@ class WordClockFrUsermod : public Usermod
         }
     }
 
+    void Print(const char* text, ...){
+      #if DEBUG_WITH_SERIAL==1
+      //built text string
+      char logText[100];
+      va_list parameterList;
+      va_start(parameterList, text);
+      vsnprintf(logText, 100, text, parameterList);
+      va_end(parameterList);
+      Serial.println(logText);
+      #endif
+    }
+
   public:
     //Functions called by WLED
 
@@ -315,6 +336,8 @@ class WordClockFrUsermod : public Usermod
       {
         // check the time
         int minutes = minute(localTime);
+
+        Print("localTime=%d, %d", localTime, minutes);
 
         // check if we already updated this minute
         if (lastTimeMinutes != minutes ||
@@ -406,6 +429,7 @@ class WordClockFrUsermod : public Usermod
       top["Allumer Il est"] = displayItIs;
       top["Allumer PAM"] = displayPAM;
       top["Activer animation"] = animationActive;
+      top["Utiliser la 3eme couleur"] = backgroundColor;
     }
 
     /*
@@ -436,6 +460,7 @@ class WordClockFrUsermod : public Usermod
       configComplete &= getJsonValue(top["Allumer Il est"], displayItIs);
       configComplete &= getJsonValue(top["Allumer PAM"], displayPAM);
       configComplete &= getJsonValue(top["Activer animation"], animationActive);
+      configComplete &= getJsonValue(top["Utiliser la 3eme couleur"], backgroundColor);
 
       return configComplete;
     }
@@ -457,7 +482,11 @@ class WordClockFrUsermod : public Usermod
           if (maskLedsOn[x] == 0)
           {
             // set pixel off
-            strip.setPixelColor(x, RGBW32(0,0,0,0));
+            if(backgroundColor==false){
+              strip.setPixelColor(x, RGBW32(0,0,0,0));
+            } else {
+              strip.setPixelColor(x, strip.color_from_palette(0, false, false, 2, 255));
+            }
           }
         }
       }
