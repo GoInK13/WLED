@@ -17,9 +17,7 @@
 class WordClockFrUsermod : public Usermod 
 {
   private:
-    unsigned long lastTime = 0;
-    int lastTimeMinutes = -1;
-
+    unsigned long lastTime = -100000; //Force first update
     // set your config variables to their boot default value (this can also be done in readFromConfig() or a constructor if you prefer)
     bool usermodActive = false;
     bool displayItIs = false;
@@ -126,10 +124,13 @@ class WordClockFrUsermod : public Usermod
       0,0,0,0,0,0,0,0,0,0,0,
       0,0,0,0,0,0,0,0,0,0,0
     };
-    int maskLedsNeed[maskSizeLeds] = {0};
+    //Mask of LED which need to be updated (with transition)
+    int maskLedsNeed[maskSizeLeds] = {0}; 
     int transitionInProgress = -1;
 
-    // update led mask
+    /**
+     * @brief Update maskLedsNeed
+     */
     void updateLedMask(const int wordMask[], int arraySize)
     {
       // loop over array
@@ -296,6 +297,45 @@ class WordClockFrUsermod : public Usermod
 #endif
     }
 
+    /**
+     * @brief Update mapping and segment
+     * @note Use a new function (in FX_fcn.cpp) to avoid parsing through json
+    **/
+    void UpdateMapAndSegment(){
+      uint16_t map[maskSizeLeds];
+      //Init array to normal
+      for (uint8_t i = 0; i < 110; i++){
+        map[i]=i;
+      }
+      
+      //Reset array to new one
+      //The first pixel are the turned ON
+      uint8_t cntOn=0, cntBg=0;
+      for (uint8_t i = 0; i < maskSizeLeds; i++){
+        if(maskLedsNeed[i]!=0){
+          map[cntOn++]=i;
+        }
+      }
+      //The rest are the OFF
+      for (uint8_t i = 0; i < maskSizeLeds; i++){
+        if(maskLedsNeed[i]==0){
+          map[cntOn+(cntBg++)]=i;
+        }
+      }
+      //We set them as segment to allow animation on background
+      strip.setSegment(0, 0, cntOn);
+      strip.setSegment(1, cntOn, maskSizeLeds);
+      for (uint8_t i = 0; i < maskSizeLeds; i++){
+        if(i<cntOn){
+          maskLedsNeed[i]=1;
+        } else {
+          maskLedsNeed[i]=0;
+        }
+      }
+      //Update map
+      strip.UpdateMapping(maskSizeLeds, map);
+    }
+
   public:
     //Functions called by WLED
 
@@ -313,6 +353,7 @@ class WordClockFrUsermod : public Usermod
      */
     void connected() 
     {
+      lastTime = -100000; //Force update
     }
 
     /*
@@ -337,38 +378,23 @@ class WordClockFrUsermod : public Usermod
           l_displayItIs_old   != displayItIs ||
           l_displayPAM_old    != displayPAM) 
       {
-        // check the time
-        int minutes = minute(localTime);
-
-        // check if we already updated this minute
-        if (lastTimeMinutes != minutes ||
-          l_usermodActive_old != usermodActive ||
-          l_displayItIs_old   != displayItIs ||
-          l_displayPAM_old    != displayPAM) 
-        {
-          // update the display with new time
-          updateDisplay(localTime);
-          if(animationDelay!=0){
-            transitionInProgress=0;
-          } else {
-            transitionInProgress=-1;
-            memcpy(maskLedsOn, maskLedsNeed, maskSizeLeds);
-          }
-          for(int i=0; i<maskSizeLeds; i++){
-            Print("[%d]=%d/%d", i, maskLedsOn[i], maskLedsNeed[i]);
-          }
-
-          // remember last update time
-          lastTimeMinutes = minutes;
+        // update the display with new time
+        updateDisplay(localTime);
+        if(animationDelay!=0){
+          transitionInProgress=0;
+        } else {
+          transitionInProgress=-1;
+          memcpy(maskLedsOn, maskLedsNeed, sizeof(int) * maskSizeLeds);
         }
+        for(int i=0; i<maskSizeLeds; i++){
+          Print("[%d]=%d/%d", i, maskLedsOn[i], maskLedsNeed[i]);
+        }
+
+        UpdateMapAndSegment();
 
         // remember last update
-        if(second(localTime)<5){
-          //Sync min at 0sec
-          lastTime = millis() - second(localTime)*1000;
-        } else {
-          lastTime = millis();
-        }
+        //Sync min at 0sec
+        lastTime = millis() - second(localTime)*1000;
         l_usermodActive_old = usermodActive;
         l_displayItIs_old   = displayItIs;
         l_displayPAM_old    = displayPAM;
@@ -503,6 +529,7 @@ class WordClockFrUsermod : public Usermod
      */
     void handleOverlayDraw()
     {
+      return;
       // check if usermod is active
       if (usermodActive == true)
       {

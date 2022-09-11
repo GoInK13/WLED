@@ -1211,6 +1211,27 @@ void WS2812FX::deserializeMap(uint8_t n) {
   releaseJSONBufferLock();
 }
 
+/**
+ * @brief Update mapping array with external function
+ * @param size : size of new map array
+ * @param newMap : New array of mapping
+ * @retval None
+ */
+void WS2812FX::UpdateMapping(uint8_t size, uint16_t * newMap){
+  //Reset mappingTable
+  if (customMappingTable != nullptr) {
+    customMappingSize = 0;
+    delete[] customMappingTable;
+    customMappingTable = nullptr;
+  }
+  //Set to new map
+  customMappingSize  = size;
+  customMappingTable = new uint16_t[customMappingSize];
+  for (uint16_t i=0; i<customMappingSize; i++) {
+    customMappingTable[i] = (uint16_t) newMap[i];
+  }
+}
+
 //gamma 2.8 lookup table used for color correction
 byte gammaT[] = {
     0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
