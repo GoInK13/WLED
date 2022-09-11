@@ -36,7 +36,7 @@ class WordClockFrUsermod : public Usermod
     #define maskSizeAntePostMeridiem  2
 
     //0=DISABLE, 1=ENABLE
-    #define DEBUG_WITH_SERIAL 1
+    #define DEBUG_WITH_SERIAL 0
 
 /*
     01234567890 0→10
@@ -285,7 +285,7 @@ class WordClockFrUsermod : public Usermod
     }
 
     void Print(const char* text, ...){
-      #if DEBUG_WITH_SERIAL==1
+#if DEBUG_WITH_SERIAL==1
       //built text string
       char logText[100];
       va_list parameterList;
@@ -293,7 +293,7 @@ class WordClockFrUsermod : public Usermod
       vsnprintf(logText, 100, text, parameterList);
       va_end(parameterList);
       Serial.println(logText);
-      #endif
+#endif
     }
 
   public:
@@ -331,16 +331,14 @@ class WordClockFrUsermod : public Usermod
       static bool l_displayPAM_old = false;
       static unsigned long tick_transition=0;
 
-      // do it every 5 seconds
-      if (millis() - lastTime > 5000 || 
+      // do it every 60 seconds
+      if (millis() - lastTime > 60000 || 
           l_usermodActive_old != usermodActive ||
           l_displayItIs_old   != displayItIs ||
           l_displayPAM_old    != displayPAM) 
       {
         // check the time
         int minutes = minute(localTime);
-
-        Print("localTime=%d, %d", localTime, minutes);
 
         // check if we already updated this minute
         if (lastTimeMinutes != minutes ||
@@ -365,7 +363,12 @@ class WordClockFrUsermod : public Usermod
         }
 
         // remember last update
-        lastTime = millis();
+        if(second(localTime)<5){
+          //Sync min at 0sec
+          lastTime = millis() - second(localTime)*1000;
+        } else {
+          lastTime = millis();
+        }
         l_usermodActive_old = usermodActive;
         l_displayItIs_old   = displayItIs;
         l_displayPAM_old    = displayPAM;
