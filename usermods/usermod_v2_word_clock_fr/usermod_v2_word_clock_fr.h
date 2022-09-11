@@ -36,7 +36,7 @@ class WordClockFrUsermod : public Usermod
     #define maskSizeAntePostMeridiem  2
 
     //0=DISABLE, 1=ENABLE
-    #define DEBUG_WITH_SERIAL 0
+    #define DEBUG_WITH_SERIAL 1
 
 /*
     01234567890 0→10
@@ -305,6 +305,12 @@ class WordClockFrUsermod : public Usermod
      */
     void setup() 
     {
+        strip.setSegment(0, 0, 5);
+        strip.setSegment(1, 6, 10);
+        strip.setSegment(2, 11, 110);
+        strip.getSegment(0).setUpLeds();
+        strip.getSegment(1).setUpLeds();
+        strip.getSegment(2).setUpLeds();
     }
 
     /*
@@ -332,7 +338,7 @@ class WordClockFrUsermod : public Usermod
       static unsigned long tick_transition=0;
 
       // do it every 60 seconds
-      if (millis() - lastTime > 60000 || 
+      if (millis() - lastTime > 5000 || 
           l_usermodActive_old != usermodActive ||
           l_displayItIs_old   != displayItIs ||
           l_displayPAM_old    != displayPAM) 
@@ -352,8 +358,10 @@ class WordClockFrUsermod : public Usermod
             transitionInProgress=0;
           } else {
             transitionInProgress=-1;
-            memcpy(maskLedsOn, maskLedsNeed, maskSizeLeds);
+            memcpy(maskLedsOn, maskLedsNeed, sizeof( int ) * maskSizeLeds);
           }
+
+          Print("transitionInProgress=%d", transitionInProgress);
           for(int i=0; i<maskSizeLeds; i++){
             Print("[%d]=%d/%d", i, maskLedsOn[i], maskLedsNeed[i]);
           }
@@ -382,7 +390,8 @@ class WordClockFrUsermod : public Usermod
         }
         if(transitionInProgress<maskSizeLeds){
           maskLedsOn[transitionInProgress]=2;
-          strip.setPixelColor(transitionInProgress, strip.color_from_palette(0, false, false, 1, 255));
+          //strip.setPixelColor(transitionInProgress, SEGMENT.color_from_palette(0, false, false, 1, 255));
+          strip.setPixelColor(transitionInProgress, RGBW32(50,0,0,0));
           strip.show();
           transitionInProgress++;
         } else {
@@ -517,10 +526,11 @@ class WordClockFrUsermod : public Usermod
               strip.setPixelColor(x, RGBW32(0,0,0,0));
             } else {
               // Use third color
-              strip.setPixelColor(x, strip.color_from_palette(0, false, false, 2, 255));
+              strip.setPixelColor(x, RGBW32(0,0,150,0));
             }
           } else if(maskLedsOn[x] == 2){
-            strip.setPixelColor(x, strip.color_from_palette(0, false, false, 1, 255));
+            //strip.setPixelColor(x, SEGMENT.color_from_palette(0, false, false, 1, 255));
+            strip.setPixelColor(x, RGBW32(50,0,0,0));
           }
         }
       }
