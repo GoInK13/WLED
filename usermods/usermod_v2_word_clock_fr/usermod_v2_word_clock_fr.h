@@ -82,7 +82,7 @@ class WordClockFrUsermod : public Usermod
       { 14,  13,  12,  60,  59,  58,  57,  56,  -1,  -1,  -1,  -1}, // 01: UNE HEURE
       {  7,   8,   9,  10,  60,  59,  58,  57,  56,  55,  -1,  -1}, // 02: DEUX HEURES
       { 25,  26,  27,  28,  29,  60,  59,  58,  57,  56,  55,  -1}, // 03: TROIS HEURES
-      { 21,  20,  19,  18,  17,  16,  60,  61,  62,  63,  64,  65}, // 04: QUATRE HEURES
+      { 21,  20,  19,  18,  17,  16,  60,  59,  58,  57,  56,  55}, // 04: QUATRE HEURES
       { 65,  64,  63,  62,  60,  59,  58,  57,  56,  55,  -1,  -1}, // 05: CINQ HEURES
       { 35,  34,  33,  60,  59,  58,  57,  56,  55,  -1,  -1,  -1}, // 06: SIX HEURES
       { 29,  30,  31,  32,  60,  59,  58,  57,  56,  55,  -1,  -1}, // 07: SEPT HEURES
@@ -90,7 +90,7 @@ class WordClockFrUsermod : public Usermod
       { 43,  42,  41,  40,  60,  59,  58,  57,  56,  55,  -1,  -1}, // 09: NEUF HEURES
       { 46,  47,  48,  60,  59,  58,  57,  56,  55,  -1,  -1,  -1}, // 10: DIX HEURES
       { 39,  38,  37,  36,  60,  59,  58,  57,  56,  55,  -1,  -1}, // 11: ONZE HEURES
-      { 44,  45,  46,  47,  60,  59,  58,  57,  56,  55,  -1,  -1}  // 12: MIDI
+      { 44,  45,  46,  47,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1}  // 12: MIDI
     };
 
     // mask "Il est"
@@ -280,7 +280,7 @@ class WordClockFrUsermod : public Usermod
         }
 
         //Set AM or PM if asked
-        if (displayPAM) {
+        if (displayPAM && hours!=0 && hours!=12) {
           setAntePostMeridiem(isPM(f_localTime));
         }
     }
