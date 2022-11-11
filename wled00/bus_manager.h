@@ -15,13 +15,19 @@ uint32_t colorBalanceFromKelvin(uint16_t kelvin, uint32_t rgb);
 void colorRGBtoRGBW(byte* rgb);
 
 // enable additional debug output
+#if defined(WLED_DEBUG_HOST)
+  #define DEBUGOUT NetDebug
+#else
+  #define DEBUGOUT Serial
+#endif
+
 #ifdef WLED_DEBUG
   #ifndef ESP8266
   #include <rom/rtc.h>
   #endif
-  #define DEBUG_PRINT(x) Serial.print(x)
-  #define DEBUG_PRINTLN(x) Serial.println(x)
-  #define DEBUG_PRINTF(x...) Serial.printf(x)
+  #define DEBUG_PRINT(x) DEBUGOUT.print(x)
+  #define DEBUG_PRINTLN(x) DEBUGOUT.println(x)
+  #define DEBUG_PRINTF(x...) DEBUGOUT.printf(x)
 #else
   #define DEBUG_PRINT(x)
   #define DEBUG_PRINTLN(x)
@@ -250,7 +256,7 @@ class BusDigital : public Bus {
     _busPtr = PolyBus::create(_iType, _pins, _len, nr);
     _valid = (_busPtr != nullptr);
     _colorOrder = bc.colorOrder;
-    DEBUG_PRINTF("Successfully inited strip %u (len %u) with type %u and pins %u,%u (itype %u)\n",nr, _len, bc.type, _pins[0],_pins[1],_iType);
+    DEBUG_PRINTF("%successfully inited strip %u (len %u) with type %u and pins %u,%u (itype %u)\n", _valid?"S":"Uns", nr, _len, bc.type, _pins[0],_pins[1],_iType);
   };
 
   inline void show() {
@@ -504,7 +510,7 @@ class BusOnOff : public Bus {
 
     uint8_t currentPin = bc.pins[0];
     if (!pinManager.allocatePin(currentPin, true, PinOwner::BusOnOff)) {
-      deallocatePins(); return;
+      return;
     }
     _pin = currentPin; //store only after allocatePin() succeeds
     pinMode(_pin, OUTPUT);
@@ -540,7 +546,7 @@ class BusOnOff : public Bus {
   }
 
   void cleanup() {
-    deallocatePins();
+    pinManager.deallocatePin(_pin, PinOwner::BusOnOff);
   }
 
   ~BusOnOff() {
@@ -550,10 +556,6 @@ class BusOnOff : public Bus {
   private: 
   uint8_t _pin = 255;
   uint8_t _data = 0;
-
-  void deallocatePins() {
-    pinManager.deallocatePin(_pin, PinOwner::BusOnOff);
-  }
 };
 
 
@@ -689,6 +691,8 @@ class BusManager {
       busses[numBusses] = new BusNetwork(bc);
     } else if (IS_DIGITAL(bc.type)) {
       busses[numBusses] = new BusDigital(bc, numBusses, colorOrderMap);
+    } else if (bc.type == TYPE_ONOFF) {
+      busses[numBusses] = new BusOnOff(bc);
     } else {
       busses[numBusses] = new BusPwm(bc);
     }

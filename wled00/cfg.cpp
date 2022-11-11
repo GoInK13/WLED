@@ -200,7 +200,11 @@ bool deserializeConfig(JsonObject doc, bool fromFS) {
       int8_t pin = btn["pin"][0] | -1;
       if (pin > -1 && pinManager.allocatePin(pin, false, PinOwner::Button)) {
         btnPin[s] = pin;
+        #ifdef ESP32
+        pinMode(btnPin[s], buttonType[s]==BTN_TYPE_PUSH_ACT_HIGH ? INPUT_PULLDOWN : INPUT_PULLUP);
+        #else
         pinMode(btnPin[s], INPUT_PULLUP);
+        #endif
       } else {
         btnPin[s] = -1;
       }
@@ -355,8 +359,9 @@ bool deserializeConfig(JsonObject doc, bool fromFS) {
   CJSON(notifyAlexa, if_sync_send["va"]);
   CJSON(notifyHue, if_sync_send["hue"]);
   CJSON(notifyMacro, if_sync_send["macro"]);
-  CJSON(notifyTwice, if_sync_send[F("twice")]);
   CJSON(syncGroups, if_sync_send["grp"]);
+  if (if_sync_send[F("twice")]) udpNumRetries = 1; // import setting from 0.13 and earlier
+  CJSON(udpNumRetries, if_sync_send["ret"]);
 
   JsonObject if_nodes = interfaces["nodes"];
   CJSON(nodeListEnabled, if_nodes[F("list")]);
@@ -373,6 +378,7 @@ bool deserializeConfig(JsonObject doc, bool fromFS) {
   CJSON(e131Universe, if_live_dmx[F("uni")]);
   CJSON(e131SkipOutOfSequence, if_live_dmx[F("seqskip")]);
   CJSON(DMXAddress, if_live_dmx[F("addr")]);
+  if (!DMXAddress || DMXAddress > 510) DMXAddress = 1;
   CJSON(DMXMode, if_live_dmx["mode"]);
 
   tdd = if_live[F("timeout")] | -1;
@@ -385,6 +391,8 @@ bool deserializeConfig(JsonObject doc, bool fromFS) {
 
   CJSON(macroAlexaOn, interfaces["va"]["macros"][0]);
   CJSON(macroAlexaOff, interfaces["va"]["macros"][1]);
+
+  CJSON(alexaNumPresets, interfaces["va"]["p"]);
 
 #ifndef WLED_DISABLE_BLYNK
   const char* apikey = interfaces["blynk"][F("token")] | "Hidden";
@@ -540,8 +548,8 @@ void deserializeConfigFromFS() {
   if (!success) { //if file does not exist, try reading from EEPROM
     #ifdef WLED_ADD_EEPROM_SUPPORT
     deEEPSettings();
-    #endif
     return;
+    #endif
   }
 
   if (!requestJSONBufferLock(1)) return;
@@ -549,11 +557,21 @@ void deserializeConfigFromFS() {
   DEBUG_PRINTLN(F("Reading settings from /cfg.json..."));
 
   success = readObjectFromFile("/cfg.json", nullptr, &doc);
-  if (!success) { //if file does not exist, try reading from EEPROM
+  if (!success) { // if file does not exist, optionally try reading from EEPROM and then save defaults to FS
+    releaseJSONBufferLock();
     #ifdef WLED_ADD_EEPROM_SUPPORT
     deEEPSettings();
     #endif
-    releaseJSONBufferLock();
+
+    // save default values to /cfg.json
+    // call readFromConfig() with an empty object so that usermods can initialize to defaults prior to saving
+    JsonObject empty = JsonObject();
+    usermods.readFromConfig(empty);
+    serializeConfig();
+    // init Ethernet (in case default type is set at compile time)
+    #ifdef WLED_USE_ETHERNET
+    WLED::instance().initEthernet();
+    #endif
     return;
   }
 
@@ -562,7 +580,7 @@ void deserializeConfigFromFS() {
   bool needsSave = deserializeConfig(doc.as<JsonObject>(), true);
   releaseJSONBufferLock();
 
-  if (needsSave) serializeConfig(); // usermods required new prameters
+  if (needsSave) serializeConfig(); // usermods required new parameters
 }
 
 void serializeConfig() {
@@ -802,8 +820,8 @@ void serializeConfig() {
   if_sync_send["va"] = notifyAlexa;
   if_sync_send["hue"] = notifyHue;
   if_sync_send["macro"] = notifyMacro;
-  if_sync_send[F("twice")] = notifyTwice;
   if_sync_send["grp"] = syncGroups;
+  if_sync_send["ret"] = udpNumRetries;
 
   JsonObject if_nodes = interfaces.createNestedObject("nodes");
   if_nodes[F("list")] = nodeListEnabled;
@@ -832,6 +850,8 @@ void serializeConfig() {
   JsonArray if_va_macros = if_va.createNestedArray("macros");
   if_va_macros.add(macroAlexaOn);
   if_va_macros.add(macroAlexaOff);
+
+  if_va["p"] = alexaNumPresets;
 
 #ifndef WLED_DISABLE_BLYNK
   JsonObject if_blynk = interfaces.createNestedObject("blynk");
@@ -946,6 +966,8 @@ void serializeConfig() {
   if (f) serializeJson(doc, f);
   f.close();
   releaseJSONBufferLock();
+
+  doSerializeConfig = false;
 }
 
 //settings in /wsec.json, not accessible via webserver, for passwords and tokens

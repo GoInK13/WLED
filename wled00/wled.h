@@ -8,7 +8,7 @@
  */
 
 // version code in format yymmddb (b = daily build)
-#define VERSION 220950
+#define VERSION 2211110
 
 //uncomment this if you have a "my_config.h" file you'd like to use
 //#define WLED_USE_MY_CONFIG
@@ -27,7 +27,7 @@
 //#define WLED_DISABLE_ALEXA       // saves 11kb
 //#define WLED_DISABLE_BLYNK       // saves 6kb
 //#define WLED_DISABLE_HUESYNC     // saves 4kb
-//#define WLED_DISABLE_INFRARED    // saves 12kb
+//#define WLED_DISABLE_INFRARED    // saves 12kb, there is no pin left for this on ESP8266-01
 #ifndef WLED_DISABLE_MQTT
   #define WLED_ENABLE_MQTT         // saves 12kb
 #endif
@@ -95,6 +95,10 @@
   #include "my_config.h"
 #endif
 
+#ifdef WLED_DEBUG_HOST
+#include "net_debug.h"
+#endif
+
 #include <ESPAsyncWebServer.h>
 #ifdef WLED_ADD_EEPROM_SUPPORT
   #include <EEPROM.h>
@@ -113,7 +117,7 @@
 #ifndef WLED_DISABLE_ALEXA
   #define ESPALEXA_ASYNC
   #define ESPALEXA_NO_SUBPAGE
-  #define ESPALEXA_MAXDEVICES 1
+  #define ESPALEXA_MAXDEVICES 10
   // #define ESPALEXA_DEBUG
   #include "src/dependencies/espalexa/Espalexa.h"
 #endif
@@ -251,6 +255,16 @@ WLED_GLOBAL int8_t irPin _INIT(-1);
 WLED_GLOBAL int8_t irPin _INIT(IRPIN);
 #endif
 
+#if defined(CONFIG_IDF_TARGET_ESP32S3) || defined(CONFIG_IDF_TARGET_ESP32C3) || defined(CONFIG_IDF_TARGET_ESP32S2) || (defined(RX) && defined(TX))
+  // use RX/TX as set by the framework - these boards do _not_ have RX=3 and TX=1
+  constexpr uint8_t hardwareRX = RX;
+  constexpr uint8_t hardwareTX = TX;
+#else
+  // use defaults for RX/TX
+  constexpr uint8_t hardwareRX = 3;
+  constexpr uint8_t hardwareTX = 1;
+#endif
+
 //WLED_GLOBAL byte presetToApply _INIT(0);
 
 WLED_GLOBAL char ntpServerName[33] _INIT("0.wled.pool.ntp.org");   // NTP server to use
@@ -344,10 +358,11 @@ WLED_GLOBAL bool notifyButton _INIT(false);                       // send if upd
 WLED_GLOBAL bool notifyAlexa  _INIT(false);                       // send notification if updated via Alexa
 WLED_GLOBAL bool notifyMacro  _INIT(false);                       // send notification for macro
 WLED_GLOBAL bool notifyHue    _INIT(true);                        // send notification if Hue light changes
-WLED_GLOBAL bool notifyTwice  _INIT(false);                       // notifications use UDP: enable if devices don't sync reliably
+WLED_GLOBAL uint8_t udpNumRetries _INIT(0);                       // Number of times a UDP sync message is retransmitted. Increase to increase reliability
 
 WLED_GLOBAL bool alexaEnabled _INIT(false);                       // enable device discovery by Amazon Echo
 WLED_GLOBAL char alexaInvocationName[33] _INIT("Light");          // speech control name of device. Choose something voice-to-text can understand
+WLED_GLOBAL byte alexaNumPresets _INIT(0);                        // number of presets to expose to Alexa, starting from preset 1, up to 9
 
 #ifndef WLED_DISABLE_BLYNK
 WLED_GLOBAL char blynkApiKey[36] _INIT("");                       // Auth token for Blynk server. If empty, no connection will be made
@@ -373,10 +388,10 @@ WLED_GLOBAL uint16_t e131Universe _INIT(1);                       // settings fo
 WLED_GLOBAL uint16_t e131Port _INIT(5568);                        // DMX in port. E1.31 default is 5568, Art-Net is 6454
 WLED_GLOBAL byte DMXMode _INIT(DMX_MODE_MULTIPLE_RGB);            // DMX mode (s.a.)
 WLED_GLOBAL uint16_t DMXAddress _INIT(1);                         // DMX start address of fixture, a.k.a. first Channel [for E1.31 (sACN) protocol]
-WLED_GLOBAL byte DMXOldDimmer _INIT(0);                           // only update brightness on change
 WLED_GLOBAL byte e131LastSequenceNumber[E131_MAX_UNIVERSE_COUNT]; // to detect packet loss
 WLED_GLOBAL bool e131Multicast _INIT(false);                      // multicast or unicast
 WLED_GLOBAL bool e131SkipOutOfSequence _INIT(false);              // freeze instead of flickering
+WLED_GLOBAL uint16_t pollReplyCount _INIT(0);                     // count number of replies for ArtPoll node report
 
 WLED_GLOBAL bool mqttEnabled _INIT(false);
 WLED_GLOBAL char mqttDeviceTopic[33] _INIT("");            // main MQTT topic (individual per device, default is wled/mac)
@@ -495,7 +510,7 @@ WLED_GLOBAL bool notifyDirectDefault _INIT(notifyDirect);
 WLED_GLOBAL bool receiveNotifications _INIT(true);
 WLED_GLOBAL unsigned long notificationSentTime _INIT(0);
 WLED_GLOBAL byte notificationSentCallMode _INIT(CALL_MODE_INIT);
-WLED_GLOBAL bool notificationTwoRequired _INIT(false);
+WLED_GLOBAL uint8_t notificationCount _INIT(0);
 
 // effects
 WLED_GLOBAL byte effectCurrent _INIT(0);
@@ -609,8 +624,9 @@ WLED_GLOBAL byte errorFlag _INIT(0);
 WLED_GLOBAL String messageHead, messageSub;
 WLED_GLOBAL byte optionType;
 
-WLED_GLOBAL bool doReboot _INIT(false);        // flag to initiate reboot from async handlers
-WLED_GLOBAL bool doPublishMqtt _INIT(false);
+WLED_GLOBAL bool doSerializeConfig _INIT(false);        // flag to initiate saving of config
+WLED_GLOBAL bool doReboot          _INIT(false);        // flag to initiate reboot from async handlers
+WLED_GLOBAL bool doPublishMqtt     _INIT(false);
 
 // status led
 #if defined(STATUSLED)
@@ -657,13 +673,28 @@ WLED_GLOBAL StaticJsonDocument<JSON_BUFFER_SIZE> doc;
 WLED_GLOBAL volatile uint8_t jsonBufferLock _INIT(0);
 
 // enable additional debug output
+#if defined(WLED_DEBUG_HOST)
+  // On the host side, use netcat to receive the log statements: nc -l 7868 -u
+  // use -D WLED_DEBUG_HOST='"192.168.xxx.xxx"' or FQDN within quotes
+  #define DEBUGOUT NetDebug
+  WLED_GLOBAL bool netDebugEnabled _INIT(true);
+  WLED_GLOBAL char netDebugPrintHost[33] _INIT(WLED_DEBUG_HOST);
+  #if defined(WLED_DEBUG_NET_PORT)
+  WLED_GLOBAL int netDebugPrintPort _INIT(WLED_DEBUG_PORT);
+  #else
+  WLED_GLOBAL int netDebugPrintPort _INIT(7868);
+  #endif
+#else
+  #define DEBUGOUT Serial
+#endif
+
 #ifdef WLED_DEBUG
   #ifndef ESP8266
   #include <rom/rtc.h>
   #endif
-  #define DEBUG_PRINT(x) Serial.print(x)
-  #define DEBUG_PRINTLN(x) Serial.println(x)
-  #define DEBUG_PRINTF(x...) Serial.printf(x)
+  #define DEBUG_PRINT(x) DEBUGOUT.print(x)
+  #define DEBUG_PRINTLN(x) DEBUGOUT.println(x)
+  #define DEBUG_PRINTF(x...) DEBUGOUT.printf(x)
 #else
   #define DEBUG_PRINT(x)
   #define DEBUG_PRINTLN(x)
@@ -671,9 +702,9 @@ WLED_GLOBAL volatile uint8_t jsonBufferLock _INIT(0);
 #endif
 
 #ifdef WLED_DEBUG_FS
-  #define DEBUGFS_PRINT(x) Serial.print(x)
-  #define DEBUGFS_PRINTLN(x) Serial.println(x)
-  #define DEBUGFS_PRINTF(x...) Serial.printf(x)
+  #define DEBUGFS_PRINT(x) DEBUGOUT.print(x)
+  #define DEBUGFS_PRINTLN(x) DEBUGOUT.println(x)
+  #define DEBUGFS_PRINTF(x...) DEBUGOUT.printf(x)
 #else
   #define DEBUGFS_PRINT(x)
   #define DEBUGFS_PRINTLN(x)

@@ -182,6 +182,7 @@ function loadBg(iUrl)
 		bg.style.opacity = a;
 		bg.style.backgroundImage = `url(${img.src})`;
 		img = null;
+		gId('namelabel').style.color = "var(--c-c)"; // improve namelabel legibility on background image
 	});
 }
 
@@ -261,7 +262,7 @@ function onLoad()
 	d.addEventListener("visibilitychange", handleVisibilityChange, false);
 	size();
 	gId("cv").style.opacity=0;
-	if (localStorage.getItem('pcm') == "true") togglePcMode(true);
+	if (localStorage.getItem('pcm') == "true" || (!/Mobi/.test(navigator.userAgent) && localStorage.getItem('pcm') == null)) togglePcMode(true);
 	var sls = d.querySelectorAll('input[type="range"]');
 	for (var sl of sls) {
 		sl.addEventListener('touchstart', toggleBubble);
@@ -399,7 +400,7 @@ function presetError(empty)
 		if (bckstr.length > 10) hasBackup = true;
 	} catch (e) {}
 
-	var cn = `<div class="pres c" ${empty?'style="padding:8px 0;margin-top: 15px;"':'onclick="loadPresets()" style="cursor:pointer;padding:8px 0;"'}>`;
+	var cn = `<div class="pres c" ${empty?'style="padding:8px;margin-top: 16px;"':'onclick="pmtLast=0;loadPresets();" style="cursor:pointer;padding:8px;margin-top: 16px;"'}>`;
 	if (empty)
 		cn += `You have no presets yet!`;
 	else
@@ -521,7 +522,7 @@ function loadFXData(callback = null)
 		fxdata = json||[];
 		// add default value for Solid
 		fxdata.shift()
-		fxdata.unshift("@;!;0");
+		fxdata.unshift(";!;0");
 	})
 	.catch((e)=>{
 		fxdata = [];
@@ -656,11 +657,13 @@ function populateInfo(i)
 	}
 	var vcn = "Kuuhaku";
 	if (i.ver.startsWith("0.14.")) vcn = "Hoshi";
+//	if (i.ver.includes("-bl")) vcn = "Supāku";
 	if (i.cn) vcn = i.cn;
 
 	cn += `v${i.ver} "${vcn}"<br><br><table>
 ${urows}
 ${urows===""?'':'<tr><td colspan=2><hr style="height:1px;border-width:0;color:gray;background-color:gray"></td></tr>'}
+${i.opt&0x100?inforow("Debug","<button class=\"btn btn-xs\" onclick=\"requestJson({'debug':"+(i.opt&0x0080?"false":"true")+"});\"><i class=\"icons "+(i.opt&0x0080?"on":"off")+"\">&#xe08f;</i></button>"):''}
 ${inforow("Build",i.vid)}
 ${inforow("Signal strength",i.wifi.signal +"% ("+ i.wifi.rssi, " dBm)")}
 ${inforow("Uptime",getRuntimeStr(i.uptime))}
@@ -835,7 +838,7 @@ function populateEffects()
 		if (ef.name.indexOf("RSVD") < 0) {
 			if (Array.isArray(fxdata) && fxdata.length>id) {
 				if (fxdata[id].length==0) fd = ";;!;1d"
-				else fd = fxdata[id].substr(1);
+				else fd = fxdata[id];
 				let eP = (fd == '')?[]:fd.split(";"); // effect parameters
 				let p = (eP.length<3 || eP[2]==='')?[]:eP[2].split(","); // palette data
 				if (p.length>0 && (p[0] !== "" && !isNumeric(p[0]))) nm += "&#x1F3A8;";	// effects using palette
@@ -952,6 +955,9 @@ function btype(b)
 {
 	switch (b) {
 		case 32: return "ESP32";
+		case 33: return "ESP32-S2";
+		case 34: return "ESP32-S3";
+		case 35: return "ESP32-C3";
 		case 82: return "ESP8266";
 	}
 	return "?";
@@ -1360,41 +1366,33 @@ function readState(s,command=false)
 function setEffectParameters(idx)
 {
 	if (!(Array.isArray(fxdata) && fxdata.length>idx)) return;
-	var controlDefined = (fxdata[idx].substr(0,1) == "@");
-	var effectPar = fxdata[idx].substr(1);
+	var controlDefined = fxdata[idx].length;
+	var effectPar = fxdata[idx];
 	var effectPars = (effectPar == '')?[]:effectPar.split(";");
 	var slOnOff = (effectPars.length==0 || effectPars[0]=='')?[]:effectPars[0].split(",");
 	var coOnOff = (effectPars.length<2  || effectPars[1]=='')?[]:effectPars[1].split(",");
 	var paOnOff = (effectPars.length<3  || effectPars[2]=='')?[]:effectPars[2].split(",");
 
 	// set html slider items on/off
-	//var nSliders = Math.min(7,Math.floor(gId("sliders").children.length)); // div for each slider + filter + options
 	let nSliders = 5;
-	var sldCnt = 0;
 	for (let i=0; i<nSliders; i++) {
 		var slider = gId("slider" + i);
 		var label = gId("sliderLabel" + i);
-		// if (not controlDefined and for AC speed or intensity and for SR alle sliders) or slider has a value
+		// if (not controlDefined and for AC speed or intensity and for SR all sliders) or slider has a value
 		if ((!controlDefined && i < ((idx<128)?2:nSliders)) || (slOnOff.length>i && slOnOff[i] != "")) {
-			//if (slOnOff.length>i && slOnOff[i].indexOf("=")>0) {
-			//	// embeded default values
-			//	var dPos = slOnOff[i].indexOf("=");
-			//	slOnOff[i] = slOnOff[i].substring(0,dPos);
-			//}
 			if (slOnOff.length>i && slOnOff[i]!="!") label.innerHTML = slOnOff[i];
 			else if (i==0)                           label.innerHTML = "Effect speed";
 			else if (i==1)                           label.innerHTML = "Effect intensity";
 			else                                     label.innerHTML = "Custom" + (i-1);
-			sldCnt++;
 			slider.classList.remove("hide");
 		} else {
 			slider.classList.add("hide");
 		}
 	}
-	if (slOnOff.length>5) {
+	if (slOnOff.length>5) { // up to 3 checkboxes
 		gId('fxopt').classList.remove('fade');
 		for (let i = 0; i<3; i++) {
-			if (slOnOff[5+i]!=='') {
+			if (5+i<slOnOff.length && slOnOff[5+i]!=='') {
 				gId('opt'+i).classList.remove('hide');
 				gId('optLabel'+i).innerHTML = slOnOff[5+i]=="!" ? 'Option' : slOnOff[5+i].substr(0,16);
 			} else
@@ -1435,7 +1433,7 @@ function setEffectParameters(idx)
 			hide = false;
 			if (!cslCnt || oCsel==i) selectSlot(i); // select 1st displayed slot or old one
 			cslCnt++;
-		} else if (!controlDefined /*|| paOnOff.length>0*/) { // if no controls then all buttons should be shown for color 1..3
+		} else if (!controlDefined) { // if no controls then all buttons should be shown for color 1..3
 			btn.style.display = "inline";
 			btn.innerHTML = `${i+1}`;
 			hide = false;
@@ -1462,13 +1460,16 @@ function setEffectParameters(idx)
 		if (paOnOff.length>0 && paOnOff[0] != "!") pall.innerHTML = paOnOff[0];
 		else                                       pall.innerHTML = '<i class="icons sel-icon" onclick="tglHex()">&#xe2b3;</i> Color palette';
 	} else {
-		// disable palett list
+		// disable palette list
 		pall.innerHTML = '<i class="icons sel-icon" onclick="tglHex()">&#xe2b3;</i> Color palette not used';
 		palw.style.display = "none";
 	}
 	// not all color selectors shown, hide palettes created from color selectors
 	for (let e of (gId('pallist').querySelectorAll('.lstI')||[])) {
-		if (cslCnt < 3 && e.querySelector('.lstIname').innerText.indexOf("* C")>=0) e.classList.add('hide'); else e.classList.remove('hide');
+		let fltr = "* C";
+		if (cslCnt==1 && csel==0) fltr = "* Colors";
+		else if (cslCnt==2) fltr = "* Colors Only";
+		if (cslCnt < 3 && e.querySelector('.lstIname').innerText.indexOf(fltr)>=0) e.classList.add('hide'); else e.classList.remove('hide');
 	}
 }
 
@@ -1493,7 +1494,8 @@ function requestJson(command=null)
 			if (tn != tr) command.transition = tn;
 		}
 		req = JSON.stringify(command);
-		if (req.length > 1430) useWs = false; // do not send very long requests over websocket
+		if (req.length > 1340) useWs = false; // do not send very long requests over websocket
+		if (req.length >  500 && lastinfo && lastinfo.arch == "esp8266") useWs = false; // esp8266 can only handle 500 bytes
 	};
 
 	if (useWs) {
@@ -1530,7 +1532,7 @@ function requestJson(command=null)
 					div.outerHTML = generateListItemHtml(
 						'palette',
 						255-j,
-						'~ Custom '+j+1+' ~',
+						'~ Custom '+j+' ~',
 						'setPalette',
 						`<div class="lstIprev" style="${genPalPrevCss(255-j)}"></div>`
 					);
@@ -2239,7 +2241,7 @@ function saveP(i,pl)
 	}
 	populatePresets();
 	resetPUtil();
-	setTimeout(()=>{pmtLast=0; loadPresets();}, 500); // force reloading of presets
+	setTimeout(()=>{pmtLast=0; loadPresets();}, 750); // force reloading of presets
 }
 
 function testPl(i,bt) {
@@ -2268,6 +2270,7 @@ function delP(i) {
 		requestJson(obj);
 		delete pJson[i];
 		populatePresets();
+		gId('putil').classList.add("staybot");
 	} else {
 		bt.style.color = "var(--c-r)";
 		bt.innerHTML = "<i class='icons btn-icon'>&#xe037;</i>Delete!";

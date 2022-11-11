@@ -78,7 +78,7 @@ CRGB    *Segment::_globalLeds = nullptr;
 
 // copy constructor
 Segment::Segment(const Segment &orig) {
-  DEBUG_PRINTLN(F("-- Copy segment constructor --"));
+  //DEBUG_PRINTLN(F("-- Copy segment constructor --"));
   memcpy(this, &orig, sizeof(Segment));
   name = nullptr;
   data = nullptr;
@@ -93,7 +93,7 @@ Segment::Segment(const Segment &orig) {
 
 // move constructor
 Segment::Segment(Segment &&orig) noexcept {
-  DEBUG_PRINTLN(F("-- Move segment constructor --"));
+  //DEBUG_PRINTLN(F("-- Move segment constructor --"));
   memcpy(this, &orig, sizeof(Segment));
   orig.name = nullptr;
   orig.data = nullptr;
@@ -104,7 +104,7 @@ Segment::Segment(Segment &&orig) noexcept {
 
 // copy assignment
 Segment& Segment::operator= (const Segment &orig) {
-  DEBUG_PRINTLN(F("-- Copying segment --"));
+  //DEBUG_PRINTLN(F("-- Copying segment --"));
   if (this != &orig) {
     // clean destination
     if (name) delete[] name;
@@ -130,7 +130,7 @@ Segment& Segment::operator= (const Segment &orig) {
 
 // move assignment
 Segment& Segment::operator= (Segment &&orig) noexcept {
-  DEBUG_PRINTLN(F("-- Moving segment --"));
+  //DEBUG_PRINTLN(F("-- Moving segment --"));
   if (this != &orig) {
     if (name) delete[] name; // free old name
     deallocateData(); // free old runtime data
@@ -394,6 +394,48 @@ void Segment::setOption(uint8_t n, bool val) {
   if (fadeTransition && n == SEG_OPTION_ON && val != prevOn) startTransition(strip.getTransition()); // start transition prior to change
   if (val) options |=   0x01 << n;
   else     options &= ~(0x01 << n);
+}
+
+void Segment::setMode(uint8_t fx, bool loadDefaults) {
+  // if we have a valid mode & is not reserved
+  if (fx < strip.getModeCount() && strncmp_P("RSVD", strip.getModeData(fx), 4)) {
+    if (fx != mode) {
+      startTransition(strip.getTransition()); // set effect transitions
+      //markForReset(); // transition will handle this
+      mode = fx;
+
+      // load default values from effect string
+      if (loadDefaults) {
+        int16_t sOpt;
+        sOpt = extractModeDefaults(fx, "sx");   if (sOpt >= 0) speed     = sOpt;
+        sOpt = extractModeDefaults(fx, "ix");   if (sOpt >= 0) intensity = sOpt;
+        sOpt = extractModeDefaults(fx, "c1");   if (sOpt >= 0) custom1   = sOpt;
+        sOpt = extractModeDefaults(fx, "c2");   if (sOpt >= 0) custom2   = sOpt;
+        sOpt = extractModeDefaults(fx, "c3");   if (sOpt >= 0) custom3   = sOpt;
+        sOpt = extractModeDefaults(fx, "mp12"); if (sOpt >= 0) map1D2D   = constrain(sOpt, 0, 7);
+        sOpt = extractModeDefaults(fx, "ssim"); if (sOpt >= 0) soundSim  = constrain(sOpt, 0, 7);
+        sOpt = extractModeDefaults(fx, "rev");  if (sOpt >= 0) reverse   = (bool)sOpt;
+        sOpt = extractModeDefaults(fx, "mi");   if (sOpt >= 0) mirror    = (bool)sOpt; // NOTE: setting this option is a risky business
+        sOpt = extractModeDefaults(fx, "rY");   if (sOpt >= 0) reverse_y = (bool)sOpt;
+        sOpt = extractModeDefaults(fx, "mY");   if (sOpt >= 0) mirror_y  = (bool)sOpt; // NOTE: setting this option is a risky business
+        sOpt = extractModeDefaults(fx, "pal");
+        if (sOpt >= 0 && (size_t)sOpt < strip.getPaletteCount() + strip.customPalettes.size()) {
+          if (sOpt != palette) {
+            palette = sOpt;
+          }
+        }
+      }
+    }
+  }
+}
+
+void Segment::setPalette(uint8_t pal) {
+  if (pal < strip.getPaletteCount()) {
+    if (pal != palette) {
+      if (strip.paletteFade) startTransition(strip.getTransition());
+      palette = pal;
+    }
+  }
 }
 
 // 2D matrix
@@ -826,8 +868,8 @@ uint8_t Segment::get_random_wheel_index(uint8_t pos) {
 uint32_t Segment::color_from_palette(uint16_t i, bool mapping, bool wrap, uint8_t mcol, uint8_t pbri)
 {
   // default palette or no RGB support on segment
-  if ((palette == 0 && mcol < NUM_COLORS) || !(_capabilities & 0x01)) {
-    uint32_t color = (transitional && _t) ? _t->_colorT[mcol] : colors[mcol];
+  if ((palette == 0 && mcol < NUM_COLORS) || !_isRGB) {
+    uint32_t color = currentColor(mcol, colors[mcol]);
     color = gamma32(color);
     if (pbri == 255) return color;
     return RGBW32(scale8_video(R(color),pbri), scale8_video(G(color),pbri), scale8_video(B(color),pbri), scale8_video(W(color),pbri));
@@ -1136,7 +1178,7 @@ void WS2812FX::setColor(uint8_t slot, uint32_t c) {
   if (slot >= NUM_COLORS) return;
 
   for (segment &seg : _segments) {
-    if (seg.isSelected()) {
+    if (seg.isActive() && seg.isSelected()) {
       seg.setColor(slot, c);
     }
   }
@@ -1172,7 +1214,7 @@ uint8_t WS2812FX::getFirstSelectedSegId(void)
 {
   size_t i = 0;
   for (segment &seg : _segments) {
-    if (seg.isSelected()) return i;
+    if (seg.isActive() && seg.isSelected()) return i;
     i++;
   }
   // if none selected, use the main segment
@@ -1459,9 +1501,7 @@ void WS2812FX::loadCustomPalettes()
   CRGBPalette16 targetPalette;
   for (int index = 0; index<10; index++) {
     char fileName[32];
-    strcpy_P(fileName, PSTR("/palette"));
-    sprintf(fileName +8, "%d", index);
-    strcat(fileName, ".json");
+    sprintf_P(fileName, PSTR("/palette%d.json"), index);
 
     StaticJsonDocument<1536> pDoc; // barely enough to fit 72 numbers
     if (WLED_FS.exists(fileName)) {
@@ -1546,7 +1586,7 @@ int16_t Bus::_cct = -1;
 uint8_t Bus::_cctBlend = 0;
 uint8_t Bus::_gAWM = 255;
 
-const char JSON_mode_names[] PROGMEM = R"=====(["Mode names have moved"])=====";
+const char JSON_mode_names[] PROGMEM = R"=====(["FX names moved"])=====";
 const char JSON_palette_names[] PROGMEM = R"=====([
 "Default","* Random Cycle","* Color 1","* Colors 1&2","* Color Gradient","* Colors Only","Party","Cloud","Lava","Ocean",
 "Forest","Rainbow","Rainbow Bands","Sunset","Rivendell","Breeze","Red & Blue","Yellowout","Analogous","Splash",
