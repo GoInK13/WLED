@@ -24,8 +24,6 @@ class WordClockFrUsermod : public Usermod
     bool usermodActive = false;
     bool displayItIs = false;
     bool displayPAM = false;
-    unsigned int animationDelay = 0;
-    bool backgroundColor = false;
     
     // defines for mask sizes
     #define maskSizeLeds        110
@@ -126,8 +124,6 @@ class WordClockFrUsermod : public Usermod
       0,0,0,0,0,0,0,0,0,0,0,
       0,0,0,0,0,0,0,0,0,0,0
     };
-    int maskLedsNeed[maskSizeLeds] = {0};
-    int transitionInProgress = -1;
 
     // update led mask
     void updateLedMask(const int wordMask[], int arraySize)
@@ -139,7 +135,7 @@ class WordClockFrUsermod : public Usermod
         if (wordMask[x] >= 0 && wordMask[x] < maskSizeLeds)
         {
           // turn LED on
-          maskLedsNeed[wordMask[x]] = 1;
+          maskLedsOn[wordMask[x]] = 1;
         }
       }
     }
@@ -201,7 +197,7 @@ class WordClockFrUsermod : public Usermod
       // disable complete matrix at the bigging
       for (int x = 0; x < maskSizeLeds; x++)
       {
-        maskLedsNeed[x] = 0;
+        maskLedsOn[x] = 0;
       } 
       
       // display it is/Il est if activated
@@ -354,17 +350,6 @@ class WordClockFrUsermod : public Usermod
         {
           // update the display with new time
           updateDisplay(localTime);
-          if(animationDelay!=0){
-            transitionInProgress=0;
-          } else {
-            transitionInProgress=-1;
-            memcpy(maskLedsOn, maskLedsNeed, sizeof( int ) * maskSizeLeds);
-          }
-
-          Print("transitionInProgress=%d", transitionInProgress);
-          for(int i=0; i<maskSizeLeds; i++){
-            Print("[%d]=%d/%d", i, maskLedsOn[i], maskLedsNeed[i]);
-          }
 
           // remember last update time
           lastTimeMinutes = minutes;
@@ -380,23 +365,6 @@ class WordClockFrUsermod : public Usermod
         l_usermodActive_old = usermodActive;
         l_displayItIs_old   = displayItIs;
         l_displayPAM_old    = displayPAM;
-      }
-
-      if(transitionInProgress!=-1 && (millis()-tick_transition)>animationDelay){
-        tick_transition=millis();
-        Print("Anim!%d", transitionInProgress);
-        if(transitionInProgress>0){
-          maskLedsOn[transitionInProgress-1]=maskLedsNeed[transitionInProgress-1];
-        }
-        if(transitionInProgress<maskSizeLeds){
-          maskLedsOn[transitionInProgress]=2;
-          //strip.setPixelColor(transitionInProgress, SEGMENT.color_from_palette(0, false, false, 1, 255));
-          strip.setPixelColor(transitionInProgress, RGBW32(50,0,0,0));
-          strip.show();
-          transitionInProgress++;
-        } else {
-          transitionInProgress=-1;
-        }
       }
     }
 
@@ -468,8 +436,6 @@ class WordClockFrUsermod : public Usermod
       top["Activer"] = usermodActive;
       top["Allumer Il est"] = displayItIs;
       top["Allumer PAM"] = displayPAM;
-      top["Delais animation (0=Off) (couleur 2)"] = animationDelay;
-      top["Utiliser la 3eme couleur"] = backgroundColor;
     }
 
     /*
@@ -499,8 +465,6 @@ class WordClockFrUsermod : public Usermod
       configComplete &= getJsonValue(top["Activer"], usermodActive);
       configComplete &= getJsonValue(top["Allumer Il est"], displayItIs);
       configComplete &= getJsonValue(top["Allumer PAM"], displayPAM);
-      configComplete &= getJsonValue(top["Delais animation (0=Off) (couleur 2)"], animationDelay);
-      configComplete &= getJsonValue(top["Utiliser la 3eme couleur"], backgroundColor);
 
       return configComplete;
     }
@@ -521,17 +485,8 @@ class WordClockFrUsermod : public Usermod
           // check mask
           if (maskLedsOn[x] == 0)
           {
-            if(backgroundColor==false){
-              // set pixel off
-              strip.setPixelColor(x, RGBW32(0,0,0,0));
-            } else {
-              // Use third color
-              strip.setPixelColor(x, RGBW32(0,0,150,0));
-            }
-          } else if(maskLedsOn[x] == 2){
-            //strip.setPixelColor(x, SEGMENT.color_from_palette(0, false, false, 1, 255));
-            strip.setPixelColor(x, RGBW32(50,0,0,0));
-          }
+            // set pixel off
+            strip.setPixelColor(x, RGBW32(0,0,0,0));
         }
       }
     }
