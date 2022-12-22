@@ -3,7 +3,7 @@
 #ifdef WLED_DEBUG_HOST
 
 size_t NetworkDebugPrinter::write(uint8_t c) {
-  if (!WLED_CONNECTED || !udpConnected) return 0;
+  if (!WLED_CONNECTED) return 0;
 
   if (!debugPrintHostIP && !debugPrintHostIP.fromString(netDebugPrintHost)) {
     #ifdef ESP8266
@@ -24,7 +24,7 @@ size_t NetworkDebugPrinter::write(uint8_t c) {
 }
 
 size_t NetworkDebugPrinter::write(const uint8_t *buf, size_t size) {
-  if (!WLED_CONNECTED || !udpConnected || buf == nullptr) return 0;
+  if (!WLED_CONNECTED || buf == nullptr) return 0;
 
   if (!debugPrintHostIP && !debugPrintHostIP.fromString(netDebugPrintHost)) {
     #ifdef ESP8266
@@ -39,7 +39,7 @@ size_t NetworkDebugPrinter::write(const uint8_t *buf, size_t size) {
   }
 
   debugUdp.beginPacket(debugPrintHostIP, netDebugPrintPort);
-  debugUdp.write(buf, size);
+  size = debugUdp.write(buf, size);
   debugUdp.endPacket();
   return size;
 }
