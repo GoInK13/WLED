@@ -17,9 +17,7 @@
 class WordClockFrUsermod : public Usermod 
 {
   private:
-    unsigned long lastTime = 0;
-    int lastTimeMinutes = -1;
-
+    unsigned long lastTime = -100000; //Force first update
     // set your config variables to their boot default value (this can also be done in readFromConfig() or a constructor if you prefer)
     bool usermodActive = false;
     bool displayItIs = false;
@@ -82,7 +80,7 @@ class WordClockFrUsermod : public Usermod
       { 14,  13,  12,  60,  59,  58,  57,  56,  -1,  -1,  -1,  -1}, // 01: UNE HEURE
       {  7,   8,   9,  10,  60,  59,  58,  57,  56,  55,  -1,  -1}, // 02: DEUX HEURES
       { 25,  26,  27,  28,  29,  60,  59,  58,  57,  56,  55,  -1}, // 03: TROIS HEURES
-      { 21,  20,  19,  18,  17,  16,  60,  61,  62,  63,  64,  65}, // 04: QUATRE HEURES
+      { 21,  20,  19,  18,  17,  16,  60,  59,  58,  57,  56,  55}, // 04: QUATRE HEURES
       { 65,  64,  63,  62,  60,  59,  58,  57,  56,  55,  -1,  -1}, // 05: CINQ HEURES
       { 35,  34,  33,  60,  59,  58,  57,  56,  55,  -1,  -1,  -1}, // 06: SIX HEURES
       { 29,  30,  31,  32,  60,  59,  58,  57,  56,  55,  -1,  -1}, // 07: SEPT HEURES
@@ -90,7 +88,7 @@ class WordClockFrUsermod : public Usermod
       { 43,  42,  41,  40,  60,  59,  58,  57,  56,  55,  -1,  -1}, // 09: NEUF HEURES
       { 46,  47,  48,  60,  59,  58,  57,  56,  55,  -1,  -1,  -1}, // 10: DIX HEURES
       { 39,  38,  37,  36,  60,  59,  58,  57,  56,  55,  -1,  -1}, // 11: ONZE HEURES
-      { 44,  45,  46,  47,  60,  59,  58,  57,  56,  55,  -1,  -1}  // 12: MIDI
+      { 44,  45,  46,  47,  -1,  -1,  -1,  -1,  -1,  -1,  -1,  -1}  // 12: MIDI
     };
 
     // mask "Il est"
@@ -125,7 +123,9 @@ class WordClockFrUsermod : public Usermod
       0,0,0,0,0,0,0,0,0,0,0
     };
 
-    // update led mask
+    /**
+     * @brief Update maskLedsNeed
+     */
     void updateLedMask(const int wordMask[], int arraySize)
     {
       // loop over array
@@ -275,7 +275,7 @@ class WordClockFrUsermod : public Usermod
         }
 
         //Set AM or PM if asked
-        if (displayPAM) {
+        if (displayPAM && hours!=0 && hours!=12) {
           setAntePostMeridiem(isPM(f_localTime));
         }
     }
@@ -292,6 +292,45 @@ class WordClockFrUsermod : public Usermod
 #endif
     }
 
+    /**
+     * @brief Update mapping and segment
+     * @note Use a new function (in FX_fcn.cpp) to avoid parsing through json
+    **/
+    void UpdateMapAndSegment(){
+      uint16_t map[maskSizeLeds];
+      //Init array to normal
+      for (uint8_t i = 0; i < 110; i++){
+        map[i]=i;
+      }
+      
+      //Reset array to new one
+      //The first pixel are the turned ON
+      uint8_t cntOn=0, cntBg=0;
+      for (uint8_t i = 0; i < maskSizeLeds; i++){
+        if(maskLedsOn[i]!=0){
+          map[cntOn++]=i;
+        }
+      }
+      //The rest are the OFF
+      for (uint8_t i = 0; i < maskSizeLeds; i++){
+        if(maskLedsOn[i]==0){
+          map[cntOn+(cntBg++)]=i;
+        }
+      }
+      //We set them as segment to allow animation on background
+      strip.setSegment(0, 0, cntOn);
+      strip.setSegment(1, cntOn, maskSizeLeds);
+      for (uint8_t i = 0; i < maskSizeLeds; i++){
+        if(i<cntOn){
+          maskLedsOn[i]=1;
+        } else {
+          maskLedsOn[i]=0;
+        }
+      }
+      //Update map
+      strip.UpdateMapping(maskSizeLeds, map);
+    }
+
   public:
     //Functions called by WLED
 
@@ -301,12 +340,9 @@ class WordClockFrUsermod : public Usermod
      */
     void setup() 
     {
-        strip.setSegment(0, 0, 5);
-        strip.setSegment(1, 6, 10);
-        strip.setSegment(2, 11, 110);
-        strip.getSegment(0).setUpLeds();
-        strip.getSegment(1).setUpLeds();
-        strip.getSegment(2).setUpLeds();
+#if DEBUG_WITH_SERIAL == 1
+      Serial.begin(115200);
+#endif
     }
 
     /*
@@ -315,6 +351,7 @@ class WordClockFrUsermod : public Usermod
      */
     void connected() 
     {
+      lastTime = -100000; //Force update
     }
 
     /*
@@ -334,34 +371,19 @@ class WordClockFrUsermod : public Usermod
       static unsigned long tick_transition=0;
 
       // do it every 60 seconds
-      if (millis() - lastTime > 5000 || 
+      if (millis() - lastTime > 60000 || 
           l_usermodActive_old != usermodActive ||
           l_displayItIs_old   != displayItIs ||
           l_displayPAM_old    != displayPAM) 
       {
-        // check the time
-        int minutes = minute(localTime);
+        // update the display with new time
+        updateDisplay(localTime);
 
-        // check if we already updated this minute
-        if (lastTimeMinutes != minutes ||
-          l_usermodActive_old != usermodActive ||
-          l_displayItIs_old   != displayItIs ||
-          l_displayPAM_old    != displayPAM) 
-        {
-          // update the display with new time
-          updateDisplay(localTime);
-
-          // remember last update time
-          lastTimeMinutes = minutes;
-        }
+        UpdateMapAndSegment();
 
         // remember last update
-        if(second(localTime)<5){
-          //Sync min at 0sec
-          lastTime = millis() - second(localTime)*1000;
-        } else {
-          lastTime = millis();
-        }
+        //Sync min at 0sec
+        lastTime = millis() - second(localTime)*1000;
         l_usermodActive_old = usermodActive;
         l_displayItIs_old   = displayItIs;
         l_displayPAM_old    = displayPAM;
@@ -476,6 +498,7 @@ class WordClockFrUsermod : public Usermod
      */
     void handleOverlayDraw()
     {
+      return;
       // check if usermod is active
       if (usermodActive == true)
       {
@@ -485,8 +508,8 @@ class WordClockFrUsermod : public Usermod
           // check mask
           if (maskLedsOn[x] == 0)
           {
-            // set pixel off
             strip.setPixelColor(x, RGBW32(0,0,0,0));
+          }
         }
       }
     }
