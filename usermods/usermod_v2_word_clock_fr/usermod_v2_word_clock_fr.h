@@ -32,7 +32,7 @@ class WordClockFrUsermod : public Usermod
     #define maskSizeAntePostMeridiem  2
 
     //0=DISABLE, 1=ENABLE
-    #define DEBUG_WITH_SERIAL 1
+    #define DEBUG_WITH_SERIAL 0
 
 /*
     01234567890 0→10
@@ -146,8 +146,9 @@ class WordClockFrUsermod : public Usermod
       int index = hours;
 
       // check if we get an overrun of 12 o´clock
-      if (hours >= 13)
-      {
+      if(hours==24){
+        index = 0;
+      } else if (hours >= 13) {
         index -= 12;
       }
 
@@ -320,14 +321,9 @@ class WordClockFrUsermod : public Usermod
       //We set them as segment to allow animation on background
       strip.setSegment(0, 0, cntOn);
       strip.setSegment(1, cntOn, maskSizeLeds);
-      for (uint8_t i = 0; i < maskSizeLeds; i++){
-        if(i<cntOn){
-          maskLedsOn[i]=1;
-        } else {
-          maskLedsOn[i]=0;
-        }
-      }
+      
       //Update map
+      Print("Up map!");
       strip.UpdateMapping(maskSizeLeds, map);
     }
 
@@ -343,6 +339,14 @@ class WordClockFrUsermod : public Usermod
 #if DEBUG_WITH_SERIAL == 1
       Serial.begin(115200);
 #endif
+      //Init preset for segment name.
+      //We need to create one preset called "Name" with the default conf to load
+      //on setup
+      String name;
+      getPresetName(1, name);
+      if(name.equals("Name")){
+        applyPreset(1);
+      }
     }
 
     /*
@@ -368,7 +372,6 @@ class WordClockFrUsermod : public Usermod
       static bool l_usermodActive_old = false;
       static bool l_displayItIs_old = false;
       static bool l_displayPAM_old = false;
-      static unsigned long tick_transition=0;
 
       // do it every 60 seconds
       if (millis() - lastTime > 60000 || 
@@ -376,6 +379,7 @@ class WordClockFrUsermod : public Usermod
           l_displayItIs_old   != displayItIs ||
           l_displayPAM_old    != displayPAM) 
       {
+
         // update the display with new time
         updateDisplay(localTime);
 
