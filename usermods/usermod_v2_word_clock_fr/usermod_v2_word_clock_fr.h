@@ -8,11 +8,16 @@
  * 
  * This usermod can be used to drive a wordclock with a 11x10 pixel matrix with WLED.
  * The visualisation is desribed in masks with LED numbers ("Il est", hours, minutes, +single minutes and "PM/AM").
- * There are 2 parameters to chnage the behaviour:
- * 
+ * There are 2 parameters to change the behaviour:
  * active:      Enable/disable usermod
  * displayItIs: Enable/disable display of "Il est" on the clock.
  * displayPAM : Enable/disable display of "AM/PM" at the bottom right
+ * 
+ * This mod creates 2 segments.
+ * The first is used to change the main color of time,
+ * The second is used to change the background animation.
+ * 
+ * On start this mode will apply preset 0, so you need to save the one you like as preset 0.
  */
 
 class WordClockFrUsermod : public Usermod 
@@ -23,6 +28,9 @@ class WordClockFrUsermod : public Usermod
     bool usermodActive = false;
     bool displayItIs = false;
     bool displayPAM = false;
+    bool firstConnection = false;
+    bool displayWaitTime = false; //Display "Time" until get time
+    bool isOnTime = false;  //=true when time is correct
     
     // defines for mask sizes
     #define maskSizeLeds        110
@@ -31,6 +39,8 @@ class WordClockFrUsermod : public Usermod
     #define maskSizeItIs        5
     #define maskSizeMinuteDots  2
     #define maskSizeAntePostMeridiem  2
+    #define maskSizeWifi        23
+    #define maskSizeTime        35
 
     //0=DISABLE, 1=ENABLE
     #define DEBUG_WITH_SERIAL 0
@@ -108,6 +118,12 @@ class WordClockFrUsermod : public Usermod
       { 100,  99}, //AM
       { 101,  99}  //PM
     };
+
+    //Mask to print wifi
+    const int maskWifi[maskSizeWifi]={2,6,13,15,19,24,26,28,30,35,38,40,60,61,62,69,80,83,84,91,95,102,106};
+
+    //Mask to print Time
+    const int maskTime[maskSizeTime]={2,3,4,15,18,25,28,37,40,56,57,58,60,61,63,64,67,68,69,70,71,73,79,80,82,84,86,89,93,95,100,101,102,104,108};
 
     // overall mask to define which LEDs are on
     int maskLedsOn[maskSizeLeds] = 
@@ -350,6 +366,13 @@ class WordClockFrUsermod : public Usermod
       if(name.equals("Name")){
         applyPreset(1);
       }
+      //Print "wifi" to tell we need wifi to continue
+      for (int x = 0; x < maskSizeLeds; x++) {
+        maskLedsOn[x] = 0;
+      } 
+      // display WiFi
+      updateLedMask(maskWifi, maskSizeWifi);
+      UpdateMapAndSegment();
     }
 
     /*
@@ -359,6 +382,7 @@ class WordClockFrUsermod : public Usermod
     void connected() 
     {
       lastTime = -100000; //Force update
+      firstConnection=true;
     }
 
     /*
@@ -376,8 +400,24 @@ class WordClockFrUsermod : public Usermod
       static bool l_displayItIs_old = false;
       static bool l_displayPAM_old = false;
 
-      // do it every 60 seconds
-      if (millis() - lastTime > 60000 || 
+      if(isOnTime==false){
+        //Check and wait time from ntp
+        if(firstConnection==true && displayWaitTime==false){
+          //Print time only if connected to wifi
+          for (int x = 0; x < maskSizeLeds; x++) {
+            maskLedsOn[x] = 0;
+          } 
+          // display time
+          updateLedMask(maskTime, maskSizeTime);
+          UpdateMapAndSegment();
+          displayWaitTime=true;
+        }
+        if(year(localTime)>2020){
+          //Time is ok if year is defined correctly
+          isOnTime=true;
+        }
+      } else if (millis() - lastTime > 60000 || 
+        // do it every 60 seconds or on any changes
           l_usermodActive_old != usermodActive ||
           l_displayItIs_old   != displayItIs ||
           l_displayPAM_old    != displayPAM) 
