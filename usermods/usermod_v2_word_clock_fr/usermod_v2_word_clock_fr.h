@@ -141,7 +141,7 @@ class WordClockFrUsermod : public Usermod
     }
 
     // set hours
-    void setHours(int hours)
+    int setHours(int hours)
     {
       int index = hours;
 
@@ -156,6 +156,7 @@ class WordClockFrUsermod : public Usermod
 
       // update led mask
       updateLedMask(maskHours[index], maskSizeHours);
+      return index;
     }
 
     // set minutes
@@ -193,6 +194,7 @@ class WordClockFrUsermod : public Usermod
     {
       int minutes = minute(f_localTime);
       int hours = hour(f_localTime);
+      int hourPrinted=0;
       Print("Change time to %d:%d", hours, minutes);
 
       // disable complete matrix at the bigging
@@ -216,67 +218,67 @@ class WordClockFrUsermod : public Usermod
         case 0:
             // full hour
             setMinutes(0);
-            setHours(hours);
+            hourPrinted=(hours);
             break;
         case 1:
             // 5 nach
             setMinutes(1);
-            setHours(hours);
+            hourPrinted=setHours(hours);
             break;
         case 2:
             // 10 nach
             setMinutes(2);
-            setHours(hours);
+            hourPrinted=setHours(hours);
             break;
         case 3:
             // 15
             setMinutes(3);
-            setHours(hours);
+            hourPrinted=setHours(hours);
             break;
         case 4:
             // 20 nach
             setMinutes(4);
-            setHours(hours);
+            hourPrinted=setHours(hours);
             break;
         case 5:
             // 25
             setMinutes(5);
-            setHours(hours);
+            hourPrinted=setHours(hours);
             break;
         case 6:
             // 30
             setMinutes(6);
-            setHours(hours);
+            hourPrinted=setHours(hours);
             break;
         case 7:
             // -25
             setMinutes(7);
-            setHours(hours + 1);
+            hourPrinted=setHours(hours + 1);
             break;
         case 8:
             // -20
             setMinutes(8);
-            setHours(hours + 1);
+            hourPrinted=setHours(hours + 1);
             break;
         case 9:
             // -15
             setMinutes(9);
-            setHours(hours + 1);
+            hourPrinted=setHours(hours + 1);
             break;
         case 10:
             // -10
             setMinutes(10);
-            setHours(hours + 1);
+            hourPrinted=setHours(hours + 1);
             break;
         case 11:
             // -5
             setMinutes(11);
-            setHours(hours + 1);
+            hourPrinted=setHours(hours + 1);
             break;
         }
 
         //Set AM or PM if asked
-        if (displayPAM && hours!=0 && hours!=12) {
+        if (displayPAM && hourPrinted!=0 && hourPrinted!=12) {
           setAntePostMeridiem(isPM(f_localTime));
         }
     }
