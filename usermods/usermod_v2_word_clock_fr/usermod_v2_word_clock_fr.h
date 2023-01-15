@@ -6,12 +6,13 @@
  * Usermods allow you to add own functionality to WLED more easily
  * See: https://github.com/Aircoookie/WLED/wiki/Add-own-functionality
  * 
- * This usermod can be used to drive a wordclock with a 11x10 pixel matrix with WLED. There are also 4 additional dots for the minutes. 
- * The visualisation is desribed in 4 mask with LED numbers (single dots for minutes, minutes, hours and "clock/Uhr").
+ * This usermod can be used to drive a wordclock with a 11x10 pixel matrix with WLED.
+ * The visualisation is desribed in masks with LED numbers ("Il est", hours, minutes, +single minutes and "PM/AM").
  * There are 2 parameters to chnage the behaviour:
  * 
- * active: enable/disable usermod
- * diplayItIs: enable/disable display of "Il est" on the clock.
+ * active:      Enable/disable usermod
+ * displayItIs: Enable/disable display of "Il est" on the clock.
+ * displayPAM : Enable/disable display of "AM/PM" at the bottom right
  */
 
 class WordClockFrUsermod : public Usermod 
