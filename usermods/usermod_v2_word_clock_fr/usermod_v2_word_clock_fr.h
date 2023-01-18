@@ -8,8 +8,8 @@
  * 
  * This usermod can be used to drive a wordclock with a 11x10 pixel matrix with WLED.
  * The visualisation is desribed in masks with LED numbers ("Il est", hours, minutes, +single minutes and "PM/AM").
- * There are 2 parameters to change the behaviour:
- * active:      Enable/disable usermod
+ * There are 3 parameters to change the behaviour:
+ * active:    : Enable/disable usermod
  * displayItIs: Enable/disable display of "Il est" on the clock.
  * displayPAM : Enable/disable display of "AM/PM" at the bottom right
  * 
@@ -17,7 +17,8 @@
  * The first is used to change the main color of time,
  * The second is used to change the background animation.
  * 
- * On start this mode will apply preset 0, so you need to save the one you like as preset 0.
+ * On start this mode will apply preset 1 (called "Init"), so you need to save the one you like as preset 1 
+ * with name "Init". If no "Init" was found, it will create one with default values.
  */
 
 class WordClockFrUsermod : public Usermod 
@@ -323,6 +324,22 @@ class WordClockFrUsermod : public Usermod
         map[i]=i;
       }
       
+#if DEBUG_WITH_SERIAL==1
+    int8_t step=1;
+    uint8_t line=0;
+    uint8_t counter11=0;
+    for(uint8_t i=0; i<110; i+=step){
+      Serial.print(maskLedsOn[i]);
+      if((counter11++)==10){
+        counter11=0;
+        step=(step==-1)*2-1;
+        line++;
+        i+=10+2*(line%2);
+        Serial.println();
+      }
+    }
+#endif
+
       //Reset array to new one
       //The first pixel are the turned ON
       uint8_t cntOn=0, cntBg=0;
@@ -357,14 +374,28 @@ class WordClockFrUsermod : public Usermod
     {
 #if DEBUG_WITH_SERIAL == 1
       Serial.begin(115200);
+      Serial.println("Start!V2");
 #endif
       //Init preset for segment name.
       //We need to create one preset called "Name" with the default conf to load
       //on setup
       String name;
       getPresetName(1, name);
-      if(name.equals("Name")){
+      if(name.equals("Init")){
         applyPreset(1);
+        Print("Apply 1/Init!");
+      } else {
+        //Create a new preset if no one found
+        Print("Create Init");
+        char json[] = "{\"on\":true,\"bri\":255,\"transition\":7,\"mainseg\":0,\"seg\":[{\"id\":0,\"start\":0,\"stop\":23,\"grp\":1,\"spc\":0,\"of\":0,\"on\":true,\"frz\":false,\"bri\":255,\"cct\":127,\"n\":\"Horaire\",\"col\":[[255,160,0],[0,0,0],[0,0,0]],\"fx\":9,\"sx\":128,\"ix\":128,\"pal\":0,\"c1\":128,\"c2\":128,\"c3\":16,\"sel\":false,\"rev\":false,\"mi\":false,\"o1\":false,\"o2\":false,\"o3\":false,\"si\":0,\"m12\":0},{\"id\":1,\"start\":23,\"stop\":110,\"grp\":1,\"spc\":0,\"of\":0,\"on\":true,\"frz\":false,\"bri\":16,\"cct\":127,\"n\":\"Fond\",\"col\":[[255,170,0],[0,0,0],[0,0,0]],\"fx\":79,\"sx\":123,\"ix\":7,\"pal\":15,\"c1\":128,\"c2\":128,\"c3\":16,\"sel\":true,\"rev\":false,\"mi\":false,\"o1\":false,\"o2\":false,\"o3\":false,\"si\":0,\"m12\":0},{\"stop\":0},{\"stop\":0},{\"stop\":0},{\"stop\":0},{\"stop\":0},{\"stop\":0},{\"stop\":0},{\"stop\":0},{\"stop\":0},{\"stop\":0},{\"stop\":0},{\"stop\":0},{\"stop\":0},{\"stop\":0}]}";
+        DynamicJsonDocument doc(1024);
+        JsonObject initObj;
+        deserializeJson(doc, json);
+        initObj = doc.as<JsonObject>();
+        savePreset(1, "Init", initObj);
+        Print("Init created!");
+        applyPreset(1);
+        Print("Apply preset 1");
       }
       //Print "wifi" to tell we need wifi to continue
       for (int x = 0; x < maskSizeLeds; x++) {
@@ -381,7 +412,7 @@ class WordClockFrUsermod : public Usermod
      */
     void connected() 
     {
-      lastTime = -100000; //Force update
+      lastTime = -100001; //Force update
       firstConnection=true;
     }
 
@@ -399,41 +430,44 @@ class WordClockFrUsermod : public Usermod
       static bool l_usermodActive_old = false;
       static bool l_displayItIs_old = false;
       static bool l_displayPAM_old = false;
-
-      if(isOnTime==false){
-        //Check and wait time from ntp
-        if(firstConnection==true && displayWaitTime==false){
-          //Print time only if connected to wifi
-          for (int x = 0; x < maskSizeLeds; x++) {
-            maskLedsOn[x] = 0;
-          } 
-          // display time
-          updateLedMask(maskTime, maskSizeTime);
-          UpdateMapAndSegment();
-          displayWaitTime=true;
-        }
-        if(year(localTime)>2020){
-          //Time is ok if year is defined correctly
-          isOnTime=true;
-        }
-      } else if (millis() - lastTime > 60000 || 
+      if(millis() - lastTime > 60000){
+        if(isOnTime==false){
+          Print("Is=%d, last=%ld", isOnTime, lastTime);
+          //Check and wait time from ntp
+          if(firstConnection==true && displayWaitTime==false){
+            //Print time only if connected to wifi
+            for (int x = 0; x < maskSizeLeds; x++) {
+              maskLedsOn[x] = 0;
+            } 
+            // display time
+            updateLedMask(maskTime, maskSizeTime);
+            UpdateMapAndSegment();
+            displayWaitTime=true;
+          }
+          if(year(localTime)>2020){
+            //Time is ok if year is defined correctly
+            isOnTime=true;
+          }
+          lastTime = millis() - 59000;//Force 1s wait
+        } else if (
+            l_usermodActive_old != usermodActive ||
+            l_displayItIs_old   != displayItIs ||
+            l_displayPAM_old    != displayPAM) 
+        {
         // do it every 60 seconds or on any changes
-          l_usermodActive_old != usermodActive ||
-          l_displayItIs_old   != displayItIs ||
-          l_displayPAM_old    != displayPAM) 
-      {
 
-        // update the display with new time
-        updateDisplay(localTime);
+          // update the display with new time
+          updateDisplay(localTime);
 
-        UpdateMapAndSegment();
+          UpdateMapAndSegment();
 
-        // remember last update
-        //Sync min at 0sec
-        lastTime = millis() - second(localTime)*1000;
-        l_usermodActive_old = usermodActive;
-        l_displayItIs_old   = displayItIs;
-        l_displayPAM_old    = displayPAM;
+          // remember last update
+          //Sync min at 0sec
+          lastTime = millis() - second(localTime)*1000;
+          l_usermodActive_old = usermodActive;
+          l_displayItIs_old   = displayItIs;
+          l_displayPAM_old    = displayPAM;
+        }
       }
     }
 
