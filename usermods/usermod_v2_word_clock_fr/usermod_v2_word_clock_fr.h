@@ -236,7 +236,7 @@ class WordClockFrUsermod : public Usermod
         case 0:
             // full hour
             setMinutes(0);
-            hourPrinted=(hours);
+            hourPrinted=setHours(hours);
             break;
         case 1:
             // 5 nach
@@ -533,7 +533,7 @@ class WordClockFrUsermod : public Usermod
      */
     void addToConfig(JsonObject& root)
     {
-      JsonObject top = root.createNestedObject("Word Clock Fr");
+      JsonObject top = root.createNestedObject("Word Clock Fr V1.0.0");
       top["Activer"] = usermodActive;
       top["Allumer Il est"] = displayItIs;
       top["Allumer PAM"] = displayPAM;
@@ -559,7 +559,7 @@ class WordClockFrUsermod : public Usermod
       // default settings values could be set here (or below using the 3-argument getJsonValue()) instead of in the class definition or constructor
       // setting them inside readFromConfig() is slightly more robust, handling the rare but plausible use case of single value being missing after boot (e.g. if the cfg.json was manually edited and a value was removed)
 
-      JsonObject top = root["Word Clock Fr"];
+      JsonObject top = root["Word Clock Fr V1.0.0"];
 
       bool configComplete = !top.isNull();
 
