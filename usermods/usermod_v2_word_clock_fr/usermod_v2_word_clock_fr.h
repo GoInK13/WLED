@@ -455,9 +455,10 @@ class WordClockFrUsermod : public Usermod
         } else {
         // do it every 60 seconds or on any changes
           // update the display with new time
-          updateDisplay(localTime);
-
-          UpdateMapAndSegment();
+          if(usermodActive){
+            updateDisplay(localTime);
+            UpdateMapAndSegment();
+          }
 
           // remember last update
           //Sync min at 0sec
