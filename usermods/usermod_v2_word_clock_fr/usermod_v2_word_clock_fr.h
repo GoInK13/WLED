@@ -430,7 +430,10 @@ class WordClockFrUsermod : public Usermod
       static bool l_usermodActive_old = false;
       static bool l_displayItIs_old = false;
       static bool l_displayPAM_old = false;
-      if(millis() - lastTime > 60000){
+      if(millis() - lastTime > 60000 ||
+          l_usermodActive_old != usermodActive ||
+          l_displayItIs_old   != displayItIs ||
+          l_displayPAM_old    != displayPAM){
         if(isOnTime==false){
           Print("Is=%d, last=%ld", isOnTime, lastTime);
           //Check and wait time from ntp
@@ -449,13 +452,8 @@ class WordClockFrUsermod : public Usermod
             isOnTime=true;
           }
           lastTime = millis() - 59000;//Force 1s wait
-        } else if (
-            l_usermodActive_old != usermodActive ||
-            l_displayItIs_old   != displayItIs ||
-            l_displayPAM_old    != displayPAM) 
-        {
+        } else {
         // do it every 60 seconds or on any changes
-
           // update the display with new time
           updateDisplay(localTime);
 
